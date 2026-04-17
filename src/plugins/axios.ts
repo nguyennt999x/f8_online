@@ -16,6 +16,8 @@ type RetryableRequestConfig = {
     [key: string]: unknown;
 };
 
+type AuthPayload = Record<string, string>;
+
 const api = axios.create({
     baseURL: API_BASE_URL,
     headers: {
@@ -23,33 +25,8 @@ const api = axios.create({
     },
 });
 
-async function login() {
-    const { data } = await axios.post(`${API_BASE_URL}${SIGN_IN_PATH}`, DEFAULT_CREDENTIALS, {
-        headers: {
-            'Content-Type': 'application/json',
-        },
-    });
-
-    const accessToken = data?.data?.accessToken || data?.accessToken || data?.token;
-    const refreshToken = data?.data?.refreshToken || data?.refreshToken;
-
-    localStorage.setItem('accessToken', accessToken);
-
-    if (refreshToken) {
-        localStorage.setItem('refreshToken', refreshToken);
-    }
-
-    return accessToken;
-}
-
-async function refreshToken() {
-    const storedRefreshToken = localStorage.getItem('refreshToken');
-
-    if (!storedRefreshToken) {
-        return login();
-    }
-
-    const { data } = await axios.post(`${API_BASE_URL}${REFRESH_TOKEN_PATH}`, { refreshToken: storedRefreshToken }, {
+async function fetchToken(path: string, payload: AuthPayload) {
+    const { data } = await axios.post(`${API_BASE_URL}${path}`, payload, {
         headers: {
             'Content-Type': 'application/json',
         },
@@ -65,6 +42,20 @@ async function refreshToken() {
     }
 
     return accessToken;
+}
+
+async function login() {
+    return fetchToken(SIGN_IN_PATH, DEFAULT_CREDENTIALS);
+}
+
+async function refreshToken() {
+    const storedRefreshToken = localStorage.getItem('refreshToken');
+
+    if (!storedRefreshToken) {
+        return login();
+    }
+
+    return fetchToken(REFRESH_TOKEN_PATH, { refreshToken: storedRefreshToken });
 }
 
 
