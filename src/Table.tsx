@@ -124,7 +124,6 @@ const Table = () => {
                 onConfirm={handleConfirmDelete}
                 onCancel={handleCancelDelete}
                 confirmText="Delete"
-                cancelText="Cancel"
                 loading={loading}
             />
         </>
