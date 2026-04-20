@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Button, Box } from '@mui/material';
 import CustomerTable from './components/CustomerTable';
 import PopupForm from './components/PopupForm';
+import ConfirmDialog from './components/ConfirmDialog';
 import { getCustomers, addCustomer, updateCustomer, deleteCustomer } from './plugins/api';
 import { CustomerResponse, CustomerInterface } from './interface';
 
@@ -10,17 +11,33 @@ const Table = () => {
     const [openPopup, setOpenPopup] = useState<boolean>(false);
     const [loading, setLoading] = useState<boolean>(false);
     const [editingCustomer, setEditingCustomer] = useState<CustomerResponse | null>(null);
+    const [openDeleteDialog, setOpenDeleteDialog] = useState<boolean>(false);
+    const [customerToDelete, setCustomerToDelete] = useState<number | null>(null);
 
     const handleDelete = (id: number) => {
-        if (window.confirm('Are you sure you want to delete this customer?')) {
-            deleteCustomer(id)
+        setCustomerToDelete(id);
+        setOpenDeleteDialog(true);
+    }
+
+    const handleConfirmDelete = () => {
+        if (customerToDelete !== null) {
+            deleteCustomer(customerToDelete)
                 .then(() => {
-                    setCustomers((prev) => prev.filter((customer) => customer.id !== id));
+                    setCustomers((prev) => prev.filter((customer) => customer.id !== customerToDelete));
                 })
                 .catch((error) => {
                     console.error('Failed to delete customer:', error);
+                })
+                .finally(() => {
+                    setOpenDeleteDialog(false);
+                    setCustomerToDelete(null);
                 });
         }
+    }
+
+    const handleCancelDelete = () => {
+        setOpenDeleteDialog(false);
+        setCustomerToDelete(null);
     }
 
     const fetchCustomers = async () => {
@@ -99,6 +116,16 @@ const Table = () => {
                 onSubmit={handleSubmit}
                 loading={loading}
                 onClose={() => setOpenPopup(false)} 
+            />
+            <ConfirmDialog
+                open={openDeleteDialog}
+                title="Confirm Delete"
+                message="Are you sure you want to delete this customer?"
+                onConfirm={handleConfirmDelete}
+                onCancel={handleCancelDelete}
+                confirmText="Delete"
+                cancelText="Cancel"
+                loading={loading}
             />
         </>
     )
