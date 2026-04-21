@@ -1,22 +1,16 @@
-import axios from 'axios';
+import axios, { AxiosHeaders, InternalAxiosRequestConfig } from 'axios';
+import { AuthCredentials, AuthResponse } from '../interface';
+import { unwrapApiData } from '../utils/api';
 
 const API_BASE_URL = '/api';
 const SIGN_IN_PATH = '/auth/signin';
 const REFRESH_TOKEN_PATH = '/auth/refresh-token';
+const ACCESS_TOKEN_KEY = 'accessToken';
+const REFRESH_TOKEN_KEY = 'refreshToken';
 
-const DEFAULT_CREDENTIALS = {
-    email: 'sonnv@test.com',
-    password: '12345678',
-};
-
-type RetryableRequestConfig = {
-    url?: string;
-    headers?: Record<string, string | number | boolean>;
+type RetryableRequestConfig = InternalAxiosRequestConfig & {
     _retry?: boolean;
-    [key: string]: unknown;
 };
-
-type AuthPayload = Record<string, string>;
 
 const api = axios.create({
     baseURL: API_BASE_URL,
@@ -25,51 +19,74 @@ const api = axios.create({
     },
 });
 
-async function fetchToken(path: string, payload: AuthPayload) {
-    const { data } = await axios.post(`${API_BASE_URL}${path}`, payload, {
-        headers: {
-            'Content-Type': 'application/json',
-        },
-    });
+const authApi = axios.create({
+    baseURL: API_BASE_URL,
+    headers: {
+        'Content-Type': 'application/json',
+    },
+});
 
-    const accessToken = data?.data?.accessToken || data?.accessToken || data?.token;
-    const newRefreshToken = data?.data?.refreshToken || data?.refreshToken;
+const persistAuth = ({ accessToken, refreshToken }: AuthResponse) => {
+    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+};
 
-    localStorage.setItem('accessToken', accessToken);
+const extractAuthTokens = (payload: unknown): AuthResponse => {
+    const authData = unwrapApiData<AuthResponse>(payload);
 
-    if (newRefreshToken) {
-        localStorage.setItem('refreshToken', newRefreshToken);
+    if (!authData?.accessToken || !authData?.refreshToken) {
+        throw new Error('Phan hoi dang nhap khong hop le.');
     }
 
-    return accessToken;
+    return authData;
+};
+
+export const getAccessToken = () => localStorage.getItem(ACCESS_TOKEN_KEY);
+
+export const getRefreshToken = () => localStorage.getItem(REFRESH_TOKEN_KEY);
+
+export const isAuthenticated = () => Boolean(getAccessToken());
+
+export const clearAuthTokens = () => {
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+};
+
+export async function login(credentials: AuthCredentials) {
+    const { data } = await authApi.post(SIGN_IN_PATH, credentials);
+    const tokens = extractAuthTokens(data);
+    persistAuth(tokens);
+
+    return tokens;
 }
 
-async function login() {
-    return fetchToken(SIGN_IN_PATH, DEFAULT_CREDENTIALS);
-}
-
-async function refreshToken() {
-    const storedRefreshToken = localStorage.getItem('refreshToken');
+export async function refreshToken() {
+    const storedRefreshToken = getRefreshToken();
 
     if (!storedRefreshToken) {
-        return login();
+        throw new Error('Khong tim thay refresh token.');
     }
 
-    return fetchToken(REFRESH_TOKEN_PATH, { refreshToken: storedRefreshToken });
+    const { data } = await authApi.post(REFRESH_TOKEN_PATH, {
+        refreshToken: storedRefreshToken,
+    });
+    const tokens = extractAuthTokens(data);
+    persistAuth(tokens);
+
+    return tokens;
 }
 
-
-
-api.interceptors.request.use(async (config) => {
+api.interceptors.request.use((config) => {
     if (config.url?.includes(SIGN_IN_PATH) || config.url?.includes(REFRESH_TOKEN_PATH)) {
         return config;
     }
 
-    const token = localStorage.getItem('accessToken') || (await login());
-    config.headers = {
-        ...(config.headers || {}),
-        Authorization: `Bearer ${token}`,
-    };
+    const token = getAccessToken();
+
+    if (token) {
+        config.headers = config.headers ?? new AxiosHeaders();
+        config.headers.set('Authorization', `Bearer ${token}`);
+    }
 
     return config;
 });
@@ -78,27 +95,39 @@ api.interceptors.response.use(
     (response) => response,
     async (error) => {
         const originalRequest = error?.config as RetryableRequestConfig | undefined;
+        const shouldRetry = error?.response?.status === 401 || error?.response?.status === 400;
 
-        if (!originalRequest || originalRequest._retry || originalRequest.url?.includes(SIGN_IN_PATH) || originalRequest.url?.includes(REFRESH_TOKEN_PATH)) {
+        if (
+            !originalRequest ||
+            originalRequest._retry ||
+            originalRequest.url?.includes(SIGN_IN_PATH) ||
+            originalRequest.url?.includes(REFRESH_TOKEN_PATH) ||
+            !shouldRetry
+        ) {
             throw error;
         }
 
-        // Handle 401 (Unauthorized) or 400 (Bad Request - expired token)
-        if (error.response?.status !== 401 && error.response?.status !== 400) {
+        const storedRefreshToken = getRefreshToken();
+
+        if (!storedRefreshToken) {
+            clearAuthTokens();
             throw error;
         }
 
         originalRequest._retry = true;
 
-        const token = await refreshToken();
-        originalRequest.headers = {
-            ...(originalRequest.headers || {}),
-            Authorization: `Bearer ${token}`,
-        };
+        try {
+            const tokens = await refreshToken();
 
-        return api(originalRequest);
+            originalRequest.headers = originalRequest.headers ?? new AxiosHeaders();
+            originalRequest.headers.set('Authorization', `Bearer ${tokens.accessToken}`);
+
+            return api(originalRequest);
+        } catch (refreshError) {
+            clearAuthTokens();
+            throw refreshError;
+        }
     },
 );
 
-export { login, refreshToken };
 export default api;
