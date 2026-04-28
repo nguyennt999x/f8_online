@@ -2,16 +2,15 @@ import './App.css';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
 import LoginPage from './pages/LoginPage';
+import OrdersDashboardPage from './pages/OrdersDashboardPage';
 import ProductPage from './pages/ProductPage';
 import { isAuthenticated } from './plugins/axios';
 
 function App() {
   return (
     <Routes>
-      <Route
-        path="/"
-        element={<Navigate to={isAuthenticated() ? '/products' : '/login'} replace />}
-      />
+      <Route path="/" element={<OrdersDashboardPage />} />
+      <Route path="/orders-dashboard" element={<OrdersDashboardPage />} />
       <Route
         path="/login"
         element={isAuthenticated() ? <Navigate to="/products" replace /> : <LoginPage />}
