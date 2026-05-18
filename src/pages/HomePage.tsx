@@ -13,6 +13,11 @@ const routes = [
     path: '/orders-dashboard',
   },
   {
+    title: 'Google Sheet',
+    description: 'Bang du lieu mau co san.',
+    path: '/google-sheet',
+  },
+  {
     title: 'Products',
     description: 'Quản lý sản phẩm sau khi đăng nhập.',
     path: '/products',

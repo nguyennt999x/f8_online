@@ -1,6 +1,7 @@
 import './App.css';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import ProtectedRoute from './components/ProtectedRoute';
+import GoogleSheetPage from './pages/GoogleSheetPage';
 import GplxExamPage from './pages/GplxExamPage';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
@@ -13,6 +14,7 @@ function App() {
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/gplx-exam" element={<GplxExamPage />} />
+      <Route path="/google-sheet" element={<GoogleSheetPage />} />
       <Route path="/orders-dashboard" element={<OrdersDashboardPage />} />
       <Route
         path="/login"
